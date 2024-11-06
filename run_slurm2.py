@@ -15,6 +15,66 @@ import pwd
 import grp
 import shutil
 
+Mag_distort_mapping = {
+    1: {
+        "1.32": {"major_scale": 1.015, "minor_scale": 0.985, "distort_ang": 14.8},  # 18000X
+        "1.08": {"major_scale": 1.015, "minor_scale": 0.986, "distort_ang": 14.8},  # 22500X
+        "0.82": {"major_scale": 1.014, "minor_scale": 0.986, "distort_ang": 13.5},  # 29000X
+        "0.64": {"major_scale": 1.013, "minor_scale": 0.988, "distort_ang": 15.01}, # 37000X
+        "0.50": {"major_scale": 1.013, "minor_scale": 0.987, "distort_ang": 16.4},  # 47000X
+        "2.1":  {"major_scale": 1.014, "minor_scale": 0.986, "distort_ang": 12.8},  # 11000X
+        "1.68": {"major_scale": 1.015, "minor_scale": 0.985, "distort_ang": 16.4},  # 14000X
+
+        "0.66": {"major_scale": 1.015, "minor_scale": 0.985, "distort_ang": 14.8},  # 18000X
+        "0.53": {"major_scale": 1.015, "minor_scale": 0.986, "distort_ang": 14.8},  # 22500X
+        "0.41": {"major_scale": 1.014, "minor_scale": 0.986, "distort_ang": 13.5},  # 29000X
+        "0.32": {"major_scale": 1.013, "minor_scale": 0.988, "distort_ang": 15.01}, # 37000X
+        "0.25": {"major_scale": 1.013, "minor_scale": 0.987, "distort_ang": 16.4},  # 47000X
+        "0.84": {"major_scale": 1.015, "minor_scale": 0.985, "distort_ang": 16.4},  # 14000X
+        "1.05": {"major_scale": 1.014, "minor_scale": 0.986, "distort_ang": 12.8},  # 11000X
+    },
+    2:{
+        "1.388": {"major_scale": 1.016, "minor_scale": 1.000, "distort_ang": 136.7},  # 64000X
+        "1.09": {"major_scale": 1.018, "minor_scale": 1.000, "distort_ang": 137.01},  # 81000X
+        "0.832": {"major_scale": 1.018, "minor_scale": 1.000, "distort_ang": 139.2},  # 105000X
+        "0.64": {"major_scale": 1.008, "minor_scale": 0.992, "distort_ang": 137.7},   # 130000X
+        "0.52": {"major_scale": 1.009, "minor_scale": 0.991, "distort_ang": 138.9},   # 165000X
+        "1.7": {"major_scale": 1.015, "minor_scale": 0.985, "distort_ang": 135.01},   # 53000X
+        "2.16": {"major_scale": 1.015, "minor_scale": 0.985, "distort_ang": 135.01},  # 42000X
+        "2.68": {"major_scale": 1.015, "minor_scale": 0.985, "distort_ang": 135.01},  # 33000X
+
+        "0.694": {"major_scale": 1.016, "minor_scale": 1.000, "distort_ang": 136.7},  # 64000X
+        "0.545": {"major_scale": 1.018, "minor_scale": 1.000, "distort_ang": 137.01}, # 81000X
+        "0.416": {"major_scale": 1.018, "minor_scale": 1.000, "distort_ang": 139.2},  # 105000X
+        "0.32": {"major_scale": 1.018, "minor_scale": 0.992, "distort_ang": 137.7},   # 130000X
+        "0.26": {"major_scale": 1.009, "minor_scale": 0.991, "distort_ang": 138.9},   # 165000X
+        "0.85": {"major_scale": 1.015, "minor_scale": 0.985, "distort_ang": 135.01},  # 53000X
+        "1.08": {"major_scale": 1.015, "minor_scale": 0.985, "distort_ang": 135.01},  # 42000X
+        "1.34": {"major_scale": 1.015, "minor_scale": 0.985, "distort_ang": 135.01},  # 33000X 
+    }
+}
+
+def get_distortion_params(scope, pixel_size):
+    scope_dict = Mag_distort_mapping.get(scope)
+    params = mode_dict.get(str(pixel_size))
+    if not params:
+        params = {"major_scale": 1.000, "minor_scale": 1.000, "distort_ang": 0.0}
+    return params
+
+def is_file_stable(filepath, wait_time=0.8, check_interval=0.4):
+    """ Check if a file size remains constant over 'wait_time' seconds."""
+    previous_size = -1
+    stable_time = 0
+    while stable_time < wait_time:
+        current_size = filepath.stat().st_size
+        if current_size == previous_size:
+            stable_time += check_interval
+        else:
+            stable_time = 0
+            previous_size = current_size
+        time.sleep(check_interval)
+    return True
+
 MATCH_LIST = ["*.tif", "*.tiff"]
 
 def add_args(parser):
@@ -47,7 +107,6 @@ def add_args(parser):
     parser.add_argument("-step", "--defocus_step", type=float, default=100.0, help="Defocus step in Angstrom")
 
     parser.add_argument("-sc", "--scope_num", type=int, help="BioEM facility microscope number")
-    
     return parser
 
 def get_tif_frame_count(tif_path):
@@ -79,24 +138,27 @@ def submit_to_slurm(job_script):
     subprocess.run(['sudo', '-u', 'pp', 'sbatch', job_script], check=True)
 
 
-def create_slurm_script(script_path, project_name, tiff_files_chunk, gain_out, args, frame_num, motioncor2_dir, ctffind5_dir, stigma_dir, flag_dir, scope):
+def create_slurm_script(script_path, project_name, tiff_files_chunk, gain_out, args, frame_num, motioncor2_dir, ctffind5_dir, stigma_dir, flag_dir, scope, nums):
     with open(script_path, 'w') as f:
         f.write("#!/bin/bash\n")
-        f.write(f"#SBATCH --job-name=T{scope}-{project_name}\n")
+        f.write(f"#SBATCH --job-name=T{scope}-{nums}-{project_name}\n")
         f.write(f"#SBATCH --gres=gpu:4\n")
         f.write(f"#SBATCH --partition=pp\n")
+        f.write(f"#SBATCH --exclusive\n")
         f.write(f"#SBATCH --output=/home/pp/out/1.out\n")
         f.write(f"#SBATCH --error=/home/pp/err/1.err\n")
-        f.write(f"sudo /home/pp/conda/pp-1.0/bin/python /home/pp/code/process_tiff_files.py --tiff_files {' '.join(map(str, tiff_files_chunk))} --gain_out {gain_out} "
+        f.write(f"sudo /home/pp/conda/pp-1.0/bin/python /home/peiyuan/code/pp/process_tiff_files_long_stigma_corrected_with3.py --tiff_files {' '.join(map(str, tiff_files_chunk))} --gain_out {gain_out} "
                 f"--binning {args.binning} --patch {args.patch} --dose {args.dose} --pixel_size {args.pixel_size} "
-                f"--accel_kv {args.accel_kv} --cs_mm {args.cs_mm} --amp_contrast {args.amp_contrast} --spectrum_size {args.spectrum_size} "
-                f"--min_res {args.min_res} --max_res {args.max_res} --min_defocus {args.min_defocus} --max_defocus {args.max_defocus} --flag_dir {flag_dir} "
+                f"--mag1 {str(major_scale)} --mag2 {str(minor_scale)} --mag3 {str(distort_ang)} "
+                f"--accel_kv {args.accel_kv} --cs_mm {args.cs_mm} --amp_contrast {args.amp_contrast} --spectrum_size {args.spectrum_size} --eer_fraction {args.eer_fraction} "
+                f"--min_res {args.min_res} --max_res {args.max_res} --min_defocus {args.min_defocus} --max_defocus {args.max_defocus} --flag_dir {flag_dir} --eer_sampling {args.eer_sampling} "
                 f"--defocus_step {args.defocus_step} --frame_num {frame_num} --motioncor2_dir {motioncor2_dir} --ctffind5_dir {ctffind5_dir} --stigma_dir {stigma_dir} --scope_id {scope}\n")
 
 def main(args):
     ### Get input_dir
     input_dir = Path(args.input) if args.input is not None else Path(os.getcwd())
     print(str(input_dir))
+
 
     ### Attempt to acquire scope_num
     if args.input is None and args.scope_num is None:
@@ -106,6 +168,19 @@ def main(args):
             print('Please check current path or specify input path')
             sys.exit(1)
     print(scope)
+
+    scope = int(scope)
+
+    ### Get anisotropic magnification distortion from scope and pixel size
+    params = get_distortion_params(scope, args.pixel_size)
+    major_scale = params["major_scale"]
+    minor_scale = params["minor_scale"]
+    distort_ang = params["distort_ang"]
+
+    if scope == 3:
+        input_dir_data = input_dir / "data"
+    else:
+        input_dir_data = input_dir
     
     ### Get project name from input_dir path
     project_name = os.path.basename(input_dir)
@@ -134,7 +209,7 @@ def main(args):
     ### Convert gain file from dm4 if needed and chown
     if Path(gain_out).exists():
         print(f"converted gain file found")
-    elif args.gain is None:
+    elif args.gain is None and scope != 3:
         dm4_files = glob.glob(os.path.join(input_dir, "*.dm4"))
         if dm4_files:
             gain_in = dm4_files[0]
@@ -149,6 +224,22 @@ def main(args):
         else:
             print(f"No gain reference file found, please check agian.")
             sys.exit(1)
+    elif args.gain is None and scope == 3:
+        gain_files = glob.glob(os.path.join(input_dir, "*.gain"))
+        if gain_files:
+            gain_in = gain_files[0]
+            
+            # Copy a backup dm4 file to output_dir
+            if args.output is not None:
+                gain_file_copy = output_dir / os.path.basename(gain_in)
+                shutil.copy(gain_in, gain_file_copy)  
+            gain_out_temp = str(output_dir / f"{project_name}_gain_temp.mrc")
+            #### Trick: Running this script with sudo will clear the evironment, so we must start from source ~/.bashrc
+            subprocess.run('bash -c "source ~/.bashrc && module load pp && tif2mrc {} {}"'.format(gain_in, gain_out_temp), shell=True, check=True)
+            subprocess.run('bash -c "source ~/.bashrc && module load pp && source activate eman2 && e2proc2d.py --process math.reciprocal {} {}"'.format(gain_out_temp, gain_out), shell=True, check=True)
+        else:
+            print(f"No gain reference file found, please check agian.")
+            sys.exit(1)
     else:   # If specified gain file
         gain = Path(args.gain)
         gain_in = str(gain)
@@ -158,7 +249,13 @@ def main(args):
             dm4_file_copy = output_dir / os.path.basename(gain_in)
             shutil.copy(gain_in, dm4_file_copy) 
 
-        subprocess.run('bash -c "source ~/.bashrc && module load pp && dm2mrc {} {}"'.format(gain_in, gain_out), shell=True, check=True)
+        if str(gain).endswith('.dm4'):
+            subprocess.run('bash -c "source ~/.bashrc && module load pp && dm2mrc {} {}"'.format(gain_in, gain_out), shell=True, check=True)
+        elif str(gain).endswith('.gain'):
+            gain_out_temp = str(output_dir / f"{project_name}_gain_temp.mrc")
+            subprocess.run('bash -c "source ~/.bashrc && module load pp && tif2mrc {} {}"'.format(gain_in, gain_out_temp), shell=True, check=True)
+            subprocess.run('bash -c "source ~/.bashrc && module load pp && source activate eman2 && e2proc2d.py --process math.reciprocal {} {}"'.format(gain_out_temp, gain_out), shell=True, check=True)
+
         # subprocess.run(cmd, check=True)
     if args.output is not None :
         os.chown(gain_out, uid, gid)
@@ -193,12 +290,12 @@ def main(args):
     ### Loop for file scanning
     while True:
         ## Scan for tiff files and initialize list by done_flags 
-        tiff_files = list(input_dir.glob("*.tif")) + list(input_dir.glob("*.tiff"))
+        tiff_files = list(input_dir_data.glob("*.tif")) + list(input_dir_data.glob("*.tiff")) + list(input_dir_data.glob("*.eer"))
         tiff_files = sorted(tiff_files)
         undone_files = []
         for tiff_file in tiff_files:
             done_flag = flag_dir / (tiff_file.name + ".done")
-            if not done_flag.exists():  # Only process files without a .done flag
+            if not done_flag.exists():
                 undone_files.append(tiff_file)
 
         ## Filter out already processed files
@@ -211,13 +308,51 @@ def main(args):
             processed_files.update(tiff_files_chunk)
 
             # Get movie shape from the first file
-            print(str(tiff_files_chunk[0])[-8:-4] + "-" + str(tiff_files_chunk[-1])[-8:-4])
-            frame_num = get_tif_frame_count(tiff_files_chunk[0])
-            
+            if is_file_stable(tiff_files_chunk[0]) and is_file_stable(tiff_files_chunk[1]) and is_file_stable(tiff_files_chunk[2]) and is_file_stable(tiff_files_chunk[3]):
+                print("ready")
+            if scope == 3:
+                nums = str(tiff_files_chunk[0])[-14:-8] + "," + str(tiff_files_chunk[-3])[-14:-8] + "," + str(tiff_files_chunk[-2])[-14:-8] + "," + str(tiff_files_chunk[-1])[-14:-8]
+                print(nums)
+            else:
+                nums = str(tiff_files_chunk[0])[-8:-4] + "," + str(tiff_files_chunk[-1])[-8:-4]
+                print(nums)
+
+            Eer_frac_path = motioncor2_dir / "fraction"
+                
+            if not Eer_frac_path.exists() and scope == 3:
+                
+                frame_num = get_tif_frame_count(tiff_files_chunk[0])
+                if frame_num == 0:
+                    frame_num = get_tif_frame_count(tiff_files_chunk[1])
+                if frame_num == 0:            
+                    frame_num = get_tif_frame_count(tiff_files_chunk[2])
+                if frame_num == 0:                
+                    frame_num = get_tif_frame_count(tiff_files_chunk[3])
+                if frame_num == 0:    
+                    continue
+                dose_per_frame = args.dose / frame_num
+                print("EER fractionation file do not exists!")
+                with open(str(Eer_frac_path), 'w', encoding='utf-8') as file:
+                    # 将变量连接起来并用制表符隔开
+                    line = f"{frame_num}\t{args.eer_fraction}\t{dose_per_frame}\n"
+                    # 将结果写入文件
+                    file.write(line)
+            else:
+                frame_num = get_tif_frame_count(tiff_files_chunk[0])
+                if frame_num == 0:
+                    frame_num = get_tif_frame_count(tiff_files_chunk[1])
+                if frame_num == 0:
+                    frame_num = get_tif_frame_count(tiff_files_chunk[2])
+                if frame_num == 0:
+                    frame_num = get_tif_frame_count(tiff_files_chunk[3])
+                if frame_num == 0:
+                    continue
+                dose_per_frame = args.dose / frame_num
+
             # Create SLURM script and submit job
             chunk_index = len(processed_files) // chunk_size
             script_path = script_dir / f"slurm_job_{chunk_index}.sh"
-            create_slurm_script(script_path, project_name, tiff_files_chunk, gain_out, args, frame_num,str(motioncor2_dir),str(ctffind5_dir),str(stigma_dir),str(flag_dir), scope)
+            create_slurm_script(script_path, project_name, tiff_files_chunk, gain_out, args, frame_num,str(motioncor2_dir),str(ctffind5_dir),str(stigma_dir),str(flag_dir), scope,nums)
             os.chmod(script_path, 0o755)
             submit_to_slurm(script_path)
             
@@ -251,7 +386,7 @@ def main(args):
             # Create SLURM script and submit job
             chunk_index = len(processed_files) // chunk_size
             script_path = script_dir / f"slurm_job_{chunk_index}.sh"
-            create_slurm_script(script_path, project_name, tiff_files_chunk, gain_out, args, frame_num,str(motioncor2_dir),str(ctffind5_dir),str(stigma_dir),str(flag_dir),scope)
+            create_slurm_script(script_path, project_name, tiff_files_chunk, gain_out, args, frame_num,str(motioncor2_dir),str(ctffind5_dir),str(stigma_dir),str(flag_dir),scope,nums)
             os.chmod(script_path, 0o755)
             submit_to_slurm(script_path)
 
@@ -275,7 +410,10 @@ def main(args):
         
         if timeout > 360:
             print(f"No more input, terminating")
-            recursive_chown_and_acl(output_dir, uid, gid)
+            if args.output is not None:
+                print("Setting premissions.")
+                recursive_chown_and_acl(output_dir, uid, gid)
+                print(f"premissions set on directory {output_dir}.")
             sys.exit(1)
 
 

@@ -15,7 +15,7 @@ import pwd
 import grp
 import shutil
 
-def is_file_stable(filepath, wait_time=10, check_interval=2):
+def is_file_stable(filepath, wait_time=0.8, check_interval=0.4):
     """ Check if a file size remains constant over 'wait_time' seconds."""
     previous_size = -1
     stable_time = 0
@@ -243,7 +243,7 @@ def main(args):
         undone_files = []
         for tiff_file in tiff_files:
             done_flag = flag_dir / (tiff_file.name + ".done")
-            if not done_flag.exists() and is_file_stable(tiff_file):
+            if not done_flag.exists():
                 undone_files.append(tiff_file)
 
         ## Filter out already processed files
@@ -256,27 +256,46 @@ def main(args):
             processed_files.update(tiff_files_chunk)
 
             # Get movie shape from the first file
+            if is_file_stable(tiff_files_chunk[0]) and is_file_stable(tiff_files_chunk[1]) and is_file_stable(tiff_files_chunk[2]) and is_file_stable(tiff_files_chunk[3]):
+                print("ready")
             if scope == 3:
-                nums = str(tiff_files_chunk[0])[-14:-8] + "-" + str(tiff_files_chunk[-1])[-14:-8]
+                nums = str(tiff_files_chunk[0])[-14:-8] + "," + str(tiff_files_chunk[-3])[-14:-8] + "," + str(tiff_files_chunk[-2])[-14:-8] + "," + str(tiff_files_chunk[-1])[-14:-8]
                 print(nums)
             else:
-                nums = str(tiff_files_chunk[0])[-8:-4] + "-" + str(tiff_files_chunk[-1])[-8:-4]
+                nums = str(tiff_files_chunk[0])[-8:-4] + "," + str(tiff_files_chunk[-1])[-8:-4]
                 print(nums)
-            frame_num = get_tif_frame_count(tiff_files_chunk[0])
 
             Eer_frac_path = motioncor2_dir / "fraction"
-            try:
-                dose_per_frame = args.dose / frame_num
-            except Exception as e:
-                print(e)
                 
             if not Eer_frac_path.exists() and scope == 3:
+                
+                frame_num = get_tif_frame_count(tiff_files_chunk[0])
+                if frame_num == 0:
+                    frame_num = get_tif_frame_count(tiff_files_chunk[1])
+                if frame_num == 0:            
+                    frame_num = get_tif_frame_count(tiff_files_chunk[2])
+                if frame_num == 0:                
+                    frame_num = get_tif_frame_count(tiff_files_chunk[3])
+                if frame_num == 0:    
+                    continue
+                dose_per_frame = args.dose / frame_num
                 print("EER fractionation file do not exists!")
                 with open(str(Eer_frac_path), 'w', encoding='utf-8') as file:
                     # 将变量连接起来并用制表符隔开
                     line = f"{frame_num}\t{args.eer_fraction}\t{dose_per_frame}\n"
                     # 将结果写入文件
                     file.write(line)
+            else:
+                frame_num = get_tif_frame_count(tiff_files_chunk[0])
+                if frame_num == 0:
+                    frame_num = get_tif_frame_count(tiff_files_chunk[1])
+                if frame_num == 0:
+                    frame_num = get_tif_frame_count(tiff_files_chunk[2])
+                if frame_num == 0:
+                    frame_num = get_tif_frame_count(tiff_files_chunk[3])
+                if frame_num == 0:
+                    continue
+                dose_per_frame = args.dose / frame_num
 
             # Create SLURM script and submit job
             chunk_index = len(processed_files) // chunk_size

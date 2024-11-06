@@ -7,10 +7,10 @@ import multiprocessing
 import pandas as pd
 import io
 import math
-os.environ['PATH'] += '/home/software/cuda-12.6.2/bin'
+os.environ['PATH'] += '/home/software/cuda-11.6.0/bin'
 
 ld_library_path = os.environ.get('LD_LIBRARY_PATH', '')
-os.environ['LD_LIBRARY_PATH'] = ld_library_path + ':/home/software/cuda-12.6.2/lib64'
+os.environ['LD_LIBRARY_PATH'] = ld_library_path + ':/home/software/cuda-11.6.0/lib64'
 
 os.environ['PATH'] += ':/usr/local/bin:/home/software/MotionCor2_1.6.4'
 os.environ['PATH'] += ':/usr/local/bin:/home/software/ctffind-5.0.2'
@@ -87,11 +87,11 @@ def process_tiff_file(tiff_file, gain_out, motioncor2_dir, ctffind5_dir, stigma_
     # Run MotionCor2
     if scope == 1 or scope == 2:    
         cmd = [
-        "/home/software/MotionCor2_1.6.4/MotionCor2",
+        "/home/software/MotionCor2_1.4.5/MotionCor2",
         "-InTiff", str(tiff_file), "-Gain", str(gain_out), "-OutMrc", str(mrc_file),
         "-FtBin", str(args.binning), "-Patch", f"{args.patch} {args.patch}",
         "-FmDose", str(args.dose / frame_num), "-PixSize", str(args.pixel_size),
-        "-kV", str(args.accel_kv), "-Gpu", str(gpu_id)
+        "-kV", str(args.accel_kv), "-Gpu", str(gpu_id), "-Mag", {arg.mag1},  {arg.mag2}, {arg.mag3} 
     ]
     elif scope == 3:
         Eer_frac_path = motioncor2_dir / "fraction"
@@ -193,8 +193,13 @@ if __name__ == "__main__":
     parser.add_argument('--stigma_dir', type=str, help='Directory for stigma output', required=True)
     parser.add_argument('--scope_id', type=int, help='BioEM facility microscope number', required=True)
     parser.add_argument('--flag_dir', type=str, help='Directory for done-flag', required=True)
+
     parser.add_argument("-esamp", "--eer_sampling", type=float, default=2, help="EER sampling mode for MotionCor2")
     parser.add_argument("-efrac", "--eer_fraction", type=float, default=40, help="EER Fractionation for MotionCor2")
+
+    parser.add_argument("-m1", "--mag1", type=str, default="1", help="Major_scale for MotionCor2 < 1.6.4")
+    parser.add_argument("-m2", "--mag2", type=str, default="1", help="Minor_scale for MotionCor2 < 1.6.4")
+    parser.add_argument("-m3", "--mag3", type=str, default="0", help="Distort_ang for MotionCor2 < 1.6.4")
 
     args = parser.parse_args()
     main(args)
