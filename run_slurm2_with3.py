@@ -15,6 +15,20 @@ import pwd
 import grp
 import shutil
 
+def is_file_stable(filepath, wait_time=10, check_interval=2):
+    """ Check if a file size remains constant over 'wait_time' seconds."""
+    previous_size = -1
+    stable_time = 0
+    while stable_time < wait_time:
+        current_size = filepath.stat().st_size
+        if current_size == previous_size:
+            stable_time += check_interval
+        else:
+            stable_time = 0
+            previous_size = current_size
+        time.sleep(check_interval)
+    return True
+
 MATCH_LIST = ["*.tif", "*.tiff"]
 
 def add_args(parser):
@@ -170,7 +184,7 @@ def main(args):
             gain_out_temp = str(output_dir / f"{project_name}_gain_temp.mrc")
             #### Trick: Running this script with sudo will clear the evironment, so we must start from source ~/.bashrc
             subprocess.run('bash -c "source ~/.bashrc && module load pp && tif2mrc {} {}"'.format(gain_in, gain_out_temp), shell=True, check=True)
-            subprocess.run('bash -c "source ~/.bashrc && module load pp && source activate eman2 e2proc2d.py --process math.reciprocal {} {}"'.format(gain_out_temp, gain_out), shell=True, check=True)
+            subprocess.run('bash -c "source ~/.bashrc && module load pp && source activate eman2 && e2proc2d.py --process math.reciprocal {} {}"'.format(gain_out_temp, gain_out), shell=True, check=True)
         else:
             print(f"No gain reference file found, please check agian.")
             sys.exit(1)
@@ -188,7 +202,7 @@ def main(args):
         elif str(gain).endswith('.gain'):
             gain_out_temp = str(output_dir / f"{project_name}_gain_temp.mrc")
             subprocess.run('bash -c "source ~/.bashrc && module load pp && tif2mrc {} {}"'.format(gain_in, gain_out_temp), shell=True, check=True)
-            subprocess.run('bash -c "source ~/.bashrc && module load pp && source activate eman2 e2proc2d.py --process math.reciprocal {} {}"'.format(gain_out_temp, gain_out), shell=True, check=True)
+            subprocess.run('bash -c "source ~/.bashrc && module load pp && source activate eman2 && e2proc2d.py --process math.reciprocal {} {}"'.format(gain_out_temp, gain_out), shell=True, check=True)
 
         # subprocess.run(cmd, check=True)
     if args.output is not None :
@@ -229,7 +243,7 @@ def main(args):
         undone_files = []
         for tiff_file in tiff_files:
             done_flag = flag_dir / (tiff_file.name + ".done")
-            if not done_flag.exists():  # Only process files without a .done flag
+            if not done_flag.exists() and is_file_stable(tiff_file):
                 undone_files.append(tiff_file)
 
         ## Filter out already processed files
