@@ -56,7 +56,7 @@ Mag_distort_mapping = {
 
 def get_distortion_params(scope, pixel_size):
     scope_dict = Mag_distort_mapping.get(scope)
-    params = mode_dict.get(str(pixel_size))
+    params = scope_dict.get(str(pixel_size))
     if not params:
         params = {"major_scale": 1.000, "minor_scale": 1.000, "distort_ang": 0.0}
     return params
@@ -138,15 +138,15 @@ def submit_to_slurm(job_script):
     subprocess.run(['sudo', '-u', 'pp', 'sbatch', job_script], check=True)
 
 
-def create_slurm_script(script_path, project_name, tiff_files_chunk, gain_out, args, frame_num, motioncor2_dir, ctffind5_dir, stigma_dir, flag_dir, scope, nums):
+def create_slurm_script(script_path, project_name, tiff_files_chunk, gain_out, args, frame_num, motioncor2_dir, ctffind5_dir, stigma_dir, flag_dir, scope, nums,major_scale,minor_scale,distort_ang):
     with open(script_path, 'w') as f:
         f.write("#!/bin/bash\n")
         f.write(f"#SBATCH --job-name=T{scope}-{nums}-{project_name}\n")
         f.write(f"#SBATCH --gres=gpu:4\n")
         f.write(f"#SBATCH --partition=pp\n")
         f.write(f"#SBATCH --exclusive\n")
-        f.write(f"#SBATCH --output=/home/pp/out/1.out\n")
-        f.write(f"#SBATCH --error=/home/pp/err/1.err\n")
+        f.write(f"#SBATCH --output=/home/pp/out/2.out\n")
+        f.write(f"#SBATCH --error=/home/pp/err/2.err\n")
         f.write(f"sudo /home/pp/conda/pp-1.0/bin/python /home/peiyuan/code/pp/process_tiff_files_long_stigma_corrected_with3.py --tiff_files {' '.join(map(str, tiff_files_chunk))} --gain_out {gain_out} "
                 f"--binning {args.binning} --patch {args.patch} --dose {args.dose} --pixel_size {args.pixel_size} "
                 f"--mag1 {str(major_scale)} --mag2 {str(minor_scale)} --mag3 {str(distort_ang)} "
@@ -171,12 +171,16 @@ def main(args):
 
     scope = int(scope)
 
+    
     ### Get anisotropic magnification distortion from scope and pixel size
-    params = get_distortion_params(scope, args.pixel_size)
+    if scope != 3:
+        params = get_distortion_params(scope, args.pixel_size)
+    else: 
+        params = {"major_scale": 1.000, "minor_scale": 1.000, "distort_ang": 0.0}
+    print(params)
     major_scale = params["major_scale"]
     minor_scale = params["minor_scale"]
     distort_ang = params["distort_ang"]
-
     if scope == 3:
         input_dir_data = input_dir / "data"
     else:
@@ -310,6 +314,7 @@ def main(args):
             # Get movie shape from the first file
             if is_file_stable(tiff_files_chunk[0]) and is_file_stable(tiff_files_chunk[1]) and is_file_stable(tiff_files_chunk[2]) and is_file_stable(tiff_files_chunk[3]):
                 print("ready")
+
             if scope == 3:
                 nums = str(tiff_files_chunk[0])[-14:-8] + "," + str(tiff_files_chunk[-3])[-14:-8] + "," + str(tiff_files_chunk[-2])[-14:-8] + "," + str(tiff_files_chunk[-1])[-14:-8]
                 print(nums)
@@ -352,7 +357,7 @@ def main(args):
             # Create SLURM script and submit job
             chunk_index = len(processed_files) // chunk_size
             script_path = script_dir / f"slurm_job_{chunk_index}.sh"
-            create_slurm_script(script_path, project_name, tiff_files_chunk, gain_out, args, frame_num,str(motioncor2_dir),str(ctffind5_dir),str(stigma_dir),str(flag_dir), scope,nums)
+            create_slurm_script(script_path, project_name, tiff_files_chunk, gain_out, args, frame_num,str(motioncor2_dir),str(ctffind5_dir),str(stigma_dir),str(flag_dir), scope,nums,major_scale,minor_scale,distort_ang)
             os.chmod(script_path, 0o755)
             submit_to_slurm(script_path)
             
@@ -386,7 +391,7 @@ def main(args):
             # Create SLURM script and submit job
             chunk_index = len(processed_files) // chunk_size
             script_path = script_dir / f"slurm_job_{chunk_index}.sh"
-            create_slurm_script(script_path, project_name, tiff_files_chunk, gain_out, args, frame_num,str(motioncor2_dir),str(ctffind5_dir),str(stigma_dir),str(flag_dir),scope,nums)
+            create_slurm_script(script_path, project_name, tiff_files_chunk, gain_out, args, frame_num,str(motioncor2_dir),str(ctffind5_dir),str(stigma_dir),str(flag_dir),scope,nums,major_scale,minor_scale,distort_ang)
             os.chmod(script_path, 0o755)
             submit_to_slurm(script_path)
 

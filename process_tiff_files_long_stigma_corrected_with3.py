@@ -76,8 +76,9 @@ def calculate_stigma(defocus_u, defocus_v, stigma_angle, scope, obj_stigma_x=0, 
     new_stigma_x = -1 * new_stigma_x
     new_stigma_y = obj_stigma_y + Ly
     new_stigma_y = -1 * new_stigma_y
-
-    return "{:.5f}".format(new_stigma_x), "{:.5f}".format(new_stigma_y)
+    new_stigma_x_str = "{:+.5f}".format(new_stigma_x)
+    new_stigma_y_str = "{:+.5f}".format(new_stigma_y)
+    return new_stigma_x_str, new_stigma_y_str
 
 def process_tiff_file(tiff_file, gain_out, motioncor2_dir, ctffind5_dir, stigma_dir, args, frame_num, gpu_id, scope, flag_dir):
     filename_without_extension = os.path.splitext(os.path.basename(tiff_file))[0]
@@ -91,12 +92,12 @@ def process_tiff_file(tiff_file, gain_out, motioncor2_dir, ctffind5_dir, stigma_
         "-InTiff", str(tiff_file), "-Gain", str(gain_out), "-OutMrc", str(mrc_file),
         "-FtBin", str(args.binning), "-Patch", f"{args.patch} {args.patch}",
         "-FmDose", str(args.dose / frame_num), "-PixSize", str(args.pixel_size),
-        "-kV", str(args.accel_kv), "-Gpu", str(gpu_id), "-Mag", {arg.mag1},  {arg.mag2}, {arg.mag3} 
+        "-kV", str(args.accel_kv), "-Gpu", str(gpu_id), "-Mag", str(args.mag1), str(args.mag2), str(args.mag3) 
     ]
     elif scope == 3:
         Eer_frac_path = motioncor2_dir / "fraction"
         cmd = [
-        "/home/software/MotionCor2_1.6.4/MotionCor2",
+        "/home/software/MotionCor2_1.6.4/MotionCor2_1.6.4_Cuda116_Mar312023",
         "-InEer", str(tiff_file), "-Gain", str(gain_out), "-OutMrc", str(mrc_file),
         "-FtBin", str(args.binning), "-EerSampling", str(args.eer_sampling), "-FmIntFile", str(Eer_frac_path), "-Patch", f"{args.patch} {args.patch}",
         "-PixSize", str(args.pixel_size),
@@ -107,7 +108,11 @@ def process_tiff_file(tiff_file, gain_out, motioncor2_dir, ctffind5_dir, stigma_
 
     # Run bash script for ctffind5
     freq_mrc_file = ctffind5_dir / (filename_without_extension + ".mrc")
-    pixel_size_ctf = args.pixel_size * args.binning
+    if scope != 3:
+        pixel_size_ctf = args.pixel_size * args.binning
+    else:
+        pixel_size_ctf = args.pixel_size
+    
     cmd = [
         "bash", str(TEMPLATE_BASH_SCRIPT),
         "-i", str(mrc_file), "-o", str(freq_mrc_file),
@@ -128,6 +133,7 @@ def process_tiff_file(tiff_file, gain_out, motioncor2_dir, ctffind5_dir, stigma_
     defocus_v = ctf_params['Defocus 2 [Angstroms]'].values[0]
     defocus_u_s = "{:.1f}".format(defocus_u)
     defocus_v_s = "{:.1f}".format(defocus_v)
+
     delta_def = defocus_u - defocus_v
     delta_def_s = "{:.1f}".format(delta_def)
     stigma_angle = ctf_params['Azimuth of Astigmatism'].values[0]
@@ -144,7 +150,7 @@ def process_tiff_file(tiff_file, gain_out, motioncor2_dir, ctffind5_dir, stigma_
 
 
     # Write stigma result to file
-    stigma_file = stigma_dir / f"{num_tiff}_{defocus_u_s}_{defocus_v_s}_{delta_def_s}_{stigma_angle_s}+X_{new_stigma_x}_Y_{new_stigma_y}.txt"
+    stigma_file = stigma_dir / f"{num_tiff}_X{new_stigma_x}_Y{new_stigma_y}_{defocus_u_s}_{defocus_v_s}_{delta_def_s}_{stigma_angle_s}.txt"
     with open(stigma_file, 'w') as file:
         file.write(f"# Columns: #1 - new stigma x; #2 - new stigma y\n")
         file.write(f"{new_stigma_x} {new_stigma_y}\n")
