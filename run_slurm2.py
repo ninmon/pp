@@ -75,6 +75,13 @@ def is_file_stable(filepath, wait_time=0.8, check_interval=0.4):
         time.sleep(check_interval)
     return True
 
+def check_all_files_stable(tiff_files_chunk):
+    # 检查所有文件是否稳定
+    for file in tiff_files_chunk:
+        if not is_file_stable(file):
+            return False
+    return True
+
 MATCH_LIST = ["*.tif", "*.tiff"]
 
 def add_args(parser):
@@ -105,6 +112,8 @@ def add_args(parser):
     parser.add_argument("-dmin", "--min_defocus", type=float, default=5000.0, help="Minimum defocus in Angstrom")
     parser.add_argument("-dmax", "--max_defocus", type=float, default=50000.0, help="Maximum defocus in Angstrom")
     parser.add_argument("-step", "--defocus_step", type=float, default=100.0, help="Defocus step in Angstrom")
+
+    parser.add_argument('-m', action='store_true', help='Apply magnification distortion')
 
     parser.add_argument("-sc", "--scope_num", type=int, help="BioEM facility microscope number")
     return parser
@@ -157,7 +166,7 @@ def create_slurm_script(script_path, project_name, tiff_files_chunk, gain_out, a
 def main(args):
     ### Get input_dir
     input_dir = Path(args.input) if args.input is not None else Path(os.getcwd())
-    print(str(input_dir))
+    print(f"Input directory is {str(input_dir)}")
 
 
     ### Attempt to acquire scope_num
@@ -167,20 +176,22 @@ def main(args):
         else:
             print('Please check current path or specify input path')
             sys.exit(1)
-    print(scope)
+    print(f"Preprocess for Titan{scope}")
 
     scope = int(scope)
 
     
     ### Get anisotropic magnification distortion from scope and pixel size
-    if scope != 3:
+    if scope != 3 and args.m == False:
         params = get_distortion_params(scope, args.pixel_size)
     else: 
         params = {"major_scale": 1.000, "minor_scale": 1.000, "distort_ang": 0.0}
-    print(params)
+    print(f"Will use -mag parameters:{params}")
     major_scale = params["major_scale"]
     minor_scale = params["minor_scale"]
     distort_ang = params["distort_ang"]
+
+
     if scope == 3:
         input_dir_data = input_dir / "data"
     else:
@@ -197,7 +208,9 @@ def main(args):
             user_info = pwd.getpwnam(username)
             uid = user_info.pw_uid
             gid = user_info.pw_gid
-            print(username,uid,gid)
+            print(f"username:{username}")
+            print(f"uid:{uid}")
+            print(f"gid:{gid}")
         except Exception as e:
             print(e)
             sys.exit(1)
@@ -212,7 +225,7 @@ def main(args):
 
     ### Convert gain file from dm4 if needed and chown
     if Path(gain_out).exists():
-        print(f"converted gain file found")
+        print(f"Converted gain file found")
     elif args.gain is None and scope != 3:
         dm4_files = glob.glob(os.path.join(input_dir, "*.dm4"))
         if dm4_files:
@@ -312,15 +325,13 @@ def main(args):
             processed_files.update(tiff_files_chunk)
 
             # Get movie shape from the first file
-            if is_file_stable(tiff_files_chunk[0]) and is_file_stable(tiff_files_chunk[1]) and is_file_stable(tiff_files_chunk[2]) and is_file_stable(tiff_files_chunk[3]):
-                print("ready")
-
-            if scope == 3:
-                nums = str(tiff_files_chunk[0])[-14:-8] + "," + str(tiff_files_chunk[-3])[-14:-8] + "," + str(tiff_files_chunk[-2])[-14:-8] + "," + str(tiff_files_chunk[-1])[-14:-8]
-                print(nums)
-            else:
-                nums = str(tiff_files_chunk[0])[-8:-4] + "," + str(tiff_files_chunk[-1])[-8:-4]
-                print(nums)
+            if check_all_files_stable(tiff_files_chunk):  
+                if scope == 3:
+                    nums = ','.join([str(file)[-14:-8] for file in tiff_files_chunk])
+                    print(f"Ready for {nums}")
+                else:
+                    nums = ','.join([str(file)[-8:-4] for file in tiff_files_chunk])
+                    print(f"Ready for {nums}")
 
             Eer_frac_path = motioncor2_dir / "fraction"
                 
@@ -384,7 +395,13 @@ def main(args):
             processed_files.update(tiff_files_chunk)
 
             # Get movie shape from the first file
-            print(str(tiff_files_chunk[0])[-8:-4] + "-" + str(tiff_files_chunk[-1])[-8:-4])
+            if check_all_files_stable(tiff_files_chunk):  
+                if scope == 3:
+                    nums = ','.join([str(file)[-14:-8] for file in tiff_files_chunk])
+                    print(f"Ready for {nums}")
+                else:
+                    nums = ','.join([str(file)[-8:-4] for file in tiff_files_chunk])
+                    print(f"Ready for {nums}")
             frame_num = get_tif_frame_count(tiff_files_chunk[0])
             
 
@@ -427,4 +444,6 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     args = add_args(parser).parse_args()
+    print(f"Preprocessing System by Shanghaitech BioEM v1.1.1")
+    print("---------------------------------------------------")
     main(args)

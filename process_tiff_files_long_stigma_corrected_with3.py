@@ -131,6 +131,9 @@ def process_tiff_file(tiff_file, gain_out, motioncor2_dir, ctffind5_dir, stigma_
     
     defocus_u = ctf_params['Defocus 1 [Angstroms]'].values[0]
     defocus_v = ctf_params['Defocus 2 [Angstroms]'].values[0]
+    avg_defocus = (defocus_u + defocus_v) / 2
+
+    avg_defocus_s = "{:.1f}".format(avg_defocus)
     defocus_u_s = "{:.1f}".format(defocus_u)
     defocus_v_s = "{:.1f}".format(defocus_v)
 
@@ -139,7 +142,8 @@ def process_tiff_file(tiff_file, gain_out, motioncor2_dir, ctffind5_dir, stigma_
     stigma_angle = ctf_params['Azimuth of Astigmatism'].values[0]
     stigma_angle_s = "{:.1f}".format(stigma_angle)
     name_str = str(tiff_file)
-    
+    ctf_res = ctf_params['CTF Rings Fit Spacing [Angstroms]'].values[0]
+    ctf_res_s = "{:.2f}".format(ctf_res)
     if scope == 3:
         num_tiff = name_str[-14:-8]
     else:
@@ -150,7 +154,7 @@ def process_tiff_file(tiff_file, gain_out, motioncor2_dir, ctffind5_dir, stigma_
 
 
     # Write stigma result to file
-    stigma_file = stigma_dir / f"{num_tiff}_X{new_stigma_x}_Y{new_stigma_y}_{defocus_u_s}_{defocus_v_s}_{delta_def_s}_{stigma_angle_s}.txt"
+    stigma_file = stigma_dir / f"{num_tiff}_X{new_stigma_x}_Y{new_stigma_y}_{avg_defocus_s}_{delta_def_s}_{stigma_angle_s}_{ctf_res_s}.txt"
     with open(stigma_file, 'w') as file:
         file.write(f"# Columns: #1 - new stigma x; #2 - new stigma y\n")
         file.write(f"{new_stigma_x} {new_stigma_y}\n")
