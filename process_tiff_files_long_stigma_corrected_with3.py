@@ -149,8 +149,12 @@ def process_tiff_file(tiff_file, gain_out, motioncor2_dir, ctffind5_dir, stigma_
     else:
         num_tiff = name_str[-8:-4]
     
-    new_stigma_y, new_stigma_x = calculate_stigma(defocus_u, defocus_v, stigma_angle, scope)
-
+    if scope != 3:
+        new_stigma_y, new_stigma_x = calculate_stigma(defocus_u, defocus_v, stigma_angle, scope)
+    else:
+        new_stigma_x, new_stigma_y = calculate_stigma(defocus_u, defocus_v, stigma_angle, scope)
+        new_stigma_x = -1 * new_stigma_x
+        new_stigma_y = -1 * new_stigma_y
 
 
     # Write stigma result to file
