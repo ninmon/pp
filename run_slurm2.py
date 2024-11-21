@@ -61,7 +61,7 @@ def get_distortion_params(scope, pixel_size):
         params = {"major_scale": 1.000, "minor_scale": 1.000, "distort_ang": 0.0}
     return params
 
-def is_file_stable(filepath, wait_time=0.8, check_interval=0.4):
+def is_file_stable(filepath, wait_time=0.5, check_interval=0.1):
     """ Check if a file size remains constant over 'wait_time' seconds."""
     previous_size = -1
     stable_time = 0
@@ -435,7 +435,7 @@ def main(args):
             if args.output is not None:
                 print("Setting premissions.")
                 recursive_chown_and_acl(output_dir, uid, gid)
-                print(f"premissions set on directory {output_dir}.")
+                print(f"Premissions set on directory {output_dir}.")
             sys.exit(1)
 
 
